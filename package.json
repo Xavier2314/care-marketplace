@@ -1,0 +1,9 @@
+{
+  "name": "care-marketplace",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "npm ci --include=dev --prefix backend && npm ci --include=dev --prefix frontend && npm run build --prefix frontend && npm run build --prefix backend",
+    "start": "npm run start:prod --prefix backend"
+  }
+}

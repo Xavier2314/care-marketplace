@@ -9,6 +9,9 @@ function required(name: string): string {
 export const config = {
   port: Number(process.env.PORT ?? 5100),
   jwtSecret: required('JWT_SECRET'),
+  /** Built frontend to serve, e.g. ../frontend/dist. Unset in development (Vite serves it). */
+  staticDir: process.env.STATIC_DIR,
+  trustProxy: process.env.TRUST_PROXY === 'true',
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   platformFeePercent: Number(process.env.PLATFORM_FEE_PERCENT ?? 15),
   paymentGateway: process.env.PAYMENT_GATEWAY ?? 'mock',

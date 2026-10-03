@@ -1,3 +1,4 @@
+import path from 'path';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -15,6 +16,8 @@ import adminRoutes from './routes/admin';
 
 export function createApp({ rateLimits = true } = {}) {
   const app = express();
+  // Behind a hosting proxy (Render, Railway, Fly) so rate limits see real client IPs.
+  if (config.trustProxy) app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: config.corsOrigin }));
   app.use(express.json({ limit: '200kb' }));
@@ -35,6 +38,13 @@ export function createApp({ rateLimits = true } = {}) {
   app.use('/api/admin', adminRoutes);
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
+
+  // In production the API also serves the built web app (single deployable service).
+  if (config.staticDir) {
+    const dir = path.resolve(config.staticDir);
+    app.use(express.static(dir, { maxAge: '1h', index: false }));
+    app.get('/{*path}', (_req, res) => res.sendFile(path.join(dir, 'index.html')));
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

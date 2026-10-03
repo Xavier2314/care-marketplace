@@ -5,12 +5,13 @@
   "main": "dist/src/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/src/index.js",
     "typecheck": "tsc --noEmit",
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start:prod": "prisma migrate deploy && if [ \"$SEED_DEMO_DATA\" = \"true\" ]; then tsx prisma/seed.ts --if-empty; fi && node dist/src/index.js"
   },
   "keywords": [],
   "author": "",
@@ -41,5 +42,8 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

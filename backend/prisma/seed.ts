@@ -101,6 +101,11 @@ const providers: SeedProvider[] = [
 ];
 
 async function main() {
+  // Deploys run with --if-empty so redeploying never wipes real data.
+  if (process.argv.includes('--if-empty') && (await prisma.user.count()) > 0) {
+    console.log('Database already has users; skipping demo seed.');
+    return;
+  }
   await prisma.$transaction([
     prisma.auditLog.deleteMany(), prisma.notification.deleteMany(), prisma.complaint.deleteMany(), prisma.review.deleteMany(),
     prisma.message.deleteMany(), prisma.payout.deleteMany(), prisma.payment.deleteMany(), prisma.booking.deleteMany(),

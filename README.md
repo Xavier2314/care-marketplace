@@ -72,6 +72,16 @@ npm test
 
 The integration suite covers the full lifecycle: onboarding, scope enforcement, verification gating, availability and double-booking checks, hourly pricing, payment hold → capture → payout, recurring bookings, cancellation refunds, credential expiry removing a provider from search, access control and safety-report alerts.
 
+## Deploying a live site
+
+The repo deploys as **one web service** (the API also serves the built web app) plus a **PostgreSQL** database.
+
+**Render (easiest):** in the Render dashboard choose **New → Blueprint**, select this repository, and click **Apply**. `render.yaml` creates the database and the web service, generates `JWT_SECRET`, runs migrations on start, and loads the demo data on the first start only. Your site will be at `https://care-marketplace-<id>.onrender.com`. Free Render services sleep when idle, so the first visit can take ~30s; the free database expires after 30 days. Use paid plans for a real pilot.
+
+**Anywhere else (Railway, Fly.io, a VPS):** use the `Dockerfile` and set `DATABASE_URL` and `JWT_SECRET` (plus `SEED_DEMO_DATA=true` if you want demo data).
+
+> ⚠️ The demo accounts below, including the admin, have published passwords. Before real people sign up, set `SEED_DEMO_DATA=false`, and replace or delete the demo accounts (at minimum, change the admin password).
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -85,6 +95,9 @@ The integration suite covers the full lifecycle: onboarding, scope enforcement, 
 | `VIDEO_BASE_URL` | `https://meet.jit.si` | Base URL for telehealth rooms |
 | `LATE_CANCEL_HOURS` / `LATE_CANCEL_REFUND_PERCENT` | `24` / `50` | Cancellation policy |
 | `REMINDER_LEAD_HOURS` | `24` | When appointment reminders go out |
+| `STATIC_DIR` | — | Built web app to serve from the API (production) |
+| `TRUST_PROXY` | `false` | Set `true` behind a hosting proxy so rate limits see real client IPs |
+| `SEED_DEMO_DATA` | — | `true` loads demo data on start if the database is empty |
 
 ## Before a real pilot
 
