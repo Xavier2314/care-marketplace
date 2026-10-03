@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT // patients and family decision-makers
+  PROVIDER
+  ADMIN
+}
+
+enum Profession {
+  CAREGIVER
+  NURSE
+  DOCTOR
+  PHYSIOTHERAPIST
+}
+
+enum ServiceCategory {
+  HOME_CARE
+  PHYSIOTHERAPY
+  TELEHEALTH
+}
+
+enum ServiceMode {
+  HOME
+  CLINIC
+  VIRTUAL
+}
+
+enum PricingType {
+  FIXED // fixed-price visit / consultation
+  HOURLY
+}
+
+enum VerificationStatus {
+  DRAFT // provider still filling in profile
+  PENDING // submitted, waiting in the admin review queue
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum CredentialStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  REQUESTED // paid (authorized), waiting for provider acceptance
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  IN_PROGRESS // provider confirmed arrival / joined call
+  COMPLETED
+}
+
+enum PaymentStatus {
+  AUTHORIZED
+  CAPTURED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FAILED
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+enum ComplaintCategory {
+  SAFETY
+  QUALITY
+  CONDUCT
+  BILLING
+  SUPPORT
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role
+  country      String // ISO 3166-1 alpha-2
+  suspended    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  provider          ProviderProfile?
+  patientBookings   Booking[]        @relation("PatientBookings")
+  messages          Message[]
+  complaints        Complaint[]      @relation("ComplaintReporter")
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+}
+
+model ProviderProfile {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id])
+  profession         Profession
+  headline           String
+  bio                String             @default("")
+  specialties        String[]
+  languages          String[]
+  yearsExperience    Int                @default(0)
+  country            String
+  city               String
+  serviceArea        String             @default("") // free text, e.g. neighbourhoods covered
+  timezone           String             @default("UTC") // IANA zone; availability is in this local time
+  verificationStatus VerificationStatus @default(DRAFT)
+  reviewNote         String?
+  ratingAvg          Float              @default(0)
+  ratingCount        Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  credentials  Credential[]
+  services     Service[]
+  availability AvailabilitySlot[]
+  bookings     Booking[]
+  payouts      Payout[]
+
+  @@index([country, city, verificationStatus])
+}
+
+model Credential {
+  id           String           @id @default(uuid())
+  providerId   String
+  provider     ProviderProfile  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  type         String // e.g. "Professional licence", "Government ID", "First aid certificate"
+  issuingBody  String
+  number       String
+  country      String
+  expiresAt    DateTime?
+  documentUrl  String?
+  status       CredentialStatus @default(PENDING)
+  reviewedById String?
+  reviewNote   String?
+  createdAt    DateTime         @default(now())
+}
+
+model Service {
+  id              String          @id @default(uuid())
+  providerId      String
+  provider        ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  category        ServiceCategory
+  title           String
+  description     String          @default("")
+  mode            ServiceMode
+  pricingType     PricingType
+  priceMinor      Int // price in minor currency units (cents)
+  currency        String // ISO 4217
+  durationMinutes Int // fixed duration, or minimum duration for hourly
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+
+  bookings Booking[]
+}
+
+/// Weekly recurring availability, in the provider's local time zone.
+model AvailabilitySlot {
+  id          String          @id @default(uuid())
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  weekday     Int // 0 = Sunday
+  startMinute Int // minutes from midnight
+  endMinute   Int
+}
+
+model Booking {
+  id                String        @id @default(uuid())
+  patientId         String
+  patient           User          @relation("PatientBookings", fields: [patientId], references: [id])
+  providerId        String
+  provider          ProviderProfile @relation(fields: [providerId], references: [id])
+  serviceId         String
+  service           Service       @relation(fields: [serviceId], references: [id])
+  recurrenceGroupId String? // set when a recurring series is booked together
+  startAt           DateTime
+  endAt             DateTime
+  mode              ServiceMode
+  address           String?
+  careRecipientName String // who receives care (patient or family member)
+  notes             String        @default("")
+  status            BookingStatus @default(REQUESTED)
+  priceMinor        Int
+  platformFeeMinor  Int
+  currency          String
+  telehealthConsent Boolean       @default(false)
+  videoRoomUrl      String?
+  checklist         Json          @default("[]") // [{ label, done }]
+  visitNotes        String? // permitted, non-clinical-record notes
+  cancelledById     String?
+  cancelReason      String?
+  arrivedAt         DateTime?
+  completedAt       DateTime?
+  reminderSentAt    DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  payment    Payment?
+  payout     Payout?
+  messages   Message[]
+  review     Review?
+  complaints Complaint[]
+
+  @@index([providerId, startAt])
+  @@index([patientId, startAt])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  bookingId     String        @unique
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  gateway       String // "mock" | "stripe" | "paystack" ...
+  externalId    String
+  amountMinor   Int
+  refundedMinor Int           @default(0)
+  currency      String
+  status        PaymentStatus
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Payout {
+  id          String          @id @default(uuid())
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  bookingId   String          @unique
+  booking     Booking         @relation(fields: [bookingId], references: [id])
+  amountMinor Int
+  currency    String
+  status      PayoutStatus    @default(PENDING)
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  rating    Int
+  comment   String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Complaint {
+  id          String            @id @default(uuid())
+  bookingId   String?
+  booking     Booking?          @relation(fields: [bookingId], references: [id])
+  reporterId  String
+  reporter    User              @relation("ComplaintReporter", fields: [reporterId], references: [id])
+  category    ComplaintCategory
+  description String
+  status      ComplaintStatus   @default(OPEN)
+  resolution  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  meta      Json     @default("{}")
+  createdAt DateTime @default(now())
+}
